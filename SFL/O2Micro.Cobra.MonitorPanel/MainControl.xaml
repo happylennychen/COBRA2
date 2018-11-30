@@ -60,7 +60,7 @@
                         </TabItem>
                         <TabItem Header="Log View">
                             <DockPanel>
-                                <Expander DockPanel.Dock="Bottom" IsExpanded="False">
+                                <Expander DockPanel.Dock="Bottom" IsExpanded="True">
                                     <Expander.Style>
                                         <Style>
                                             <Style.Triggers>
@@ -68,6 +68,7 @@
                                                     <Setter Property="Control.Height" Value="200"></Setter>
                                                 </Trigger>
                                             </Style.Triggers>
+                                            <Setter Property="Expander.ExpandDirection" Value="Up"/>
                                         </Style>
                                     </Expander.Style>
                                     <DockPanel>
