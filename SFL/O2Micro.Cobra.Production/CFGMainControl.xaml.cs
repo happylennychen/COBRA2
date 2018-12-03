@@ -65,6 +65,9 @@ namespace O2Micro.Cobra.ProductionPanel
         private string BoardFileName = "";
         private string MPTFileName = "";
         private ushort GetEfuseHexDataCommandID = 0;
+        private string BoardMD5 = "";
+        private string ParameterMD5 = "";
+        private bool hasBoardConfig = false;
         #endregion
 
         private string GetHashTableValueByKey(string str, Hashtable htable)
@@ -142,8 +145,11 @@ namespace O2Micro.Cobra.ProductionPanel
 
             foreach (var btn in EMExtensionManage.m_EM_DevicesManage.btnPanelList)  //根据ExtensionDescriptor中是否包含BoardConfig SFL来决定是否显示输入项
             {
-                if (btn.btnlabel == "BoardConfig")
+                if (btn.btnlabel == "BoardConfig" || btn.btnlabel == "Board Config")
+                {
+                    hasBoardConfig = true;
                     ShowBoardConfigInput(true);
+                }
             }
 
             TestItemsUI.DataContext = Viewmodel.TestItems;
@@ -173,11 +179,21 @@ namespace O2Micro.Cobra.ProductionPanel
             ;
         }
 
+        private string GetChipName()
+        {
+            XmlElement root = EMExtensionManage.m_extDescrip_xmlDoc.DocumentElement;
+            return root.GetAttribute("chip");
+        }
+
         private void SavePackButton_Click(object sender, RoutedEventArgs e)
         {
             string fullpath = "";
             Microsoft.Win32.SaveFileDialog saveFileDialog = new Microsoft.Win32.SaveFileDialog();
-            saveFileDialog.FileName = "default";
+            string chip = GetChipName();
+            string filename = chip + "-" + ParameterMD5;
+            if (hasBoardConfig)
+                filename += "-" + BoardMD5;
+            saveFileDialog.FileName = filename;
             saveFileDialog.FilterIndex = 1;
             saveFileDialog.RestoreDirectory = true;
             saveFileDialog.Title = "Save pack File";
@@ -425,7 +441,7 @@ namespace O2Micro.Cobra.ProductionPanel
                 return false;
             }
         }
-        private bool CheckFile(string fullpath)
+        private bool CheckFile(string fullpath, ref string MD5Code)
         {
             string tmp;
 
@@ -465,6 +481,7 @@ namespace O2Micro.Cobra.ProductionPanel
             {
                 if (VerifyMd5Hash(md5Hash, sb.ToString(), hash))
                 {
+                    MD5Code = hash.Substring(hash.Length - 5);
                     return true;
                 }
                 else
@@ -479,13 +496,13 @@ namespace O2Micro.Cobra.ProductionPanel
             openFileDialog.Title = "Load Parameters Config File";
             openFileDialog.Filter = "Parameters Config file (*.cfg)|*.cfg||";
             openFileDialog.DefaultExt = "cfg";
-            openFileDialog.FileName = "default";
+            //openFileDialog.FileName = "default";
             openFileDialog.FilterIndex = 1;
             openFileDialog.RestoreDirectory = true;
             openFileDialog.InitialDirectory = FolderMap.m_currentproj_folder;
             if (openFileDialog.ShowDialog() == true)
             {
-                if (CheckFile(openFileDialog.FileName))
+                if (CheckFile(openFileDialog.FileName, ref ParameterMD5))
                 {
                     ParametersFilePath.Text = openFileDialog.FileName;
                     ParametersFilePath.IsEnabled = true;
@@ -504,13 +521,13 @@ namespace O2Micro.Cobra.ProductionPanel
             openFileDialog.Title = "Load Board Config File";
             openFileDialog.Filter = "Board Config file (*.board)|*.board||";
             openFileDialog.DefaultExt = "board";
-            openFileDialog.FileName = "default";
+            //openFileDialog.FileName = "default";
             openFileDialog.FilterIndex = 1;
             openFileDialog.RestoreDirectory = true;
             openFileDialog.InitialDirectory = FolderMap.m_currentproj_folder;
             if (openFileDialog.ShowDialog() == true)
             {
-                if (CheckFile(openFileDialog.FileName))
+                if (CheckFile(openFileDialog.FileName, ref BoardMD5))
                 {
                     BoardFilePath.Text = openFileDialog.FileName;
                     BoardFilePath.IsEnabled = true;
@@ -534,7 +551,11 @@ namespace O2Micro.Cobra.ProductionPanel
         {
             string fullpath = "";
             Microsoft.Win32.SaveFileDialog saveFileDialog = new Microsoft.Win32.SaveFileDialog();
-            saveFileDialog.FileName = "default";
+            string chip = GetChipName();
+            string filename = chip + "-" + ParameterMD5;
+            if (hasBoardConfig)
+                filename += "-" + BoardMD5;
+            saveFileDialog.FileName = filename;
             saveFileDialog.FilterIndex = 1;
             saveFileDialog.RestoreDirectory = true;
             saveFileDialog.Title = "Save HEX File";

@@ -324,22 +324,89 @@ namespace O2Micro.Cobra.DeviceConfigurationPanel
             }
         }
 
+        private string GetChipName()
+        { 
+            XmlElement root = EMExtensionManage.m_extDescrip_xmlDoc.DocumentElement;
+            return root.GetAttribute("chip");
+        }
+
+        private string GetMD5Code()
+        {
+
+            StringBuilder sb = new StringBuilder();
+            foreach (SFLModel model in viewmode.sfl_parameterlist)
+            {
+                if (model == null) continue;
+                string name = model.nickname;
+                sb.Append(name);
+                string strval;
+                switch (model.editortype)
+                {
+                    case 0:
+                        {
+                            strval = model.sphydata;
+                            break;
+                        }
+                    case 1:
+                    case 2:
+                        {
+                            strval = String.Format("{0:F1}", model.data);
+                            break;
+                        }
+                    default:
+                        strval = model.sphydata;
+                        break; ;
+                }
+                sb.Append(strval);
+            }
+            string hash;
+            using (MD5 md5Hash = MD5.Create())
+            {
+                hash = GetMd5Hash(md5Hash, sb.ToString());
+            }
+            return hash.Substring(hash.Length - 5);
+        }
+
+        private void SaveBoardConfigFilePath(string fullpath)
+        {
+            string settingfilepath = System.IO.Path.Combine(FolderMap.m_currentproj_folder,"settings.xml");
+            FileStream file = new FileStream(settingfilepath, FileMode.Create);
+            StreamWriter sw = new StreamWriter(file);
+            sw.WriteLine("<?xml version=\"1.0\"?>");
+            sw.WriteLine("<root>");
+            sw.WriteLine("</root>");
+            sw.Close();
+            file.Close();
+            XmlDocument doc = new XmlDocument();
+            doc.Load(settingfilepath);
+            XmlElement root = doc.DocumentElement;
+
+            XmlElement item = doc.CreateElement("BoardConfigFileName");
+            XmlText filepath = doc.CreateTextNode(fullpath);
+            root.AppendChild(item);
+            item.AppendChild(filepath);
+
+            doc.Save(settingfilepath);
+        }
+
         private void SaveBtn_Click(object sender, RoutedEventArgs e)
         {
             string fullpath = "";
+            string chipname = GetChipName();    //Issue1373
+            string MD5Code = GetMD5Code();
             Microsoft.Win32.SaveFileDialog saveFileDialog = new Microsoft.Win32.SaveFileDialog();
             saveFileDialog.FilterIndex = 1;
             saveFileDialog.RestoreDirectory = true;
-            if (sflname == "BoardConfig")
+            if (sflname == "BoardConfig" || sflname == "Board Config")
             {
-                saveFileDialog.FileName = "default";
+                saveFileDialog.FileName = chipname+"-"+MD5Code;
                 saveFileDialog.Title = "Save Board Config file";
                 saveFileDialog.Filter = "Board Config file (*.board)|*.board||";
                 saveFileDialog.DefaultExt = "board";
             }
             else
             {
-                saveFileDialog.FileName = "parameter";
+                saveFileDialog.FileName = chipname + "-" + MD5Code;
                 saveFileDialog.Title = "Save Configuration File";
                 saveFileDialog.Filter = "Device Configuration file (*.cfg)|*.cfg|c file (*.c)|*.c|h file (*.h)|*.h||";
                 saveFileDialog.DefaultExt = "cfg";
@@ -354,7 +421,13 @@ namespace O2Micro.Cobra.DeviceConfigurationPanel
                     SaveFile(fullpath);
                 }
             }
+            else return;
+
             StatusLabel.Content = fullpath;
+            if (sflname == "BoardConfig" || sflname == "Board Config")    //Issue1373
+            {
+                SaveBoardConfigFilePath(fullpath);
+            }
         }
 
         internal void LoadFile(string fullpath)
