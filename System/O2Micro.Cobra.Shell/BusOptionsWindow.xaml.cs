@@ -13,6 +13,7 @@ using System.ComponentModel;
 using System.Collections.ObjectModel;
 using O2Micro.Cobra.Common;
 using O2Micro.Cobra.EM;
+using System.Xml;
 
 namespace O2Micro.Cobra.Shell
 {
@@ -67,7 +68,65 @@ namespace O2Micro.Cobra.Shell
 			Hide();
             Close();
 		}
+        private bool hasBoardConfigSFL()
+        {
+            foreach (var btn in EMExtensionManage.m_EM_DevicesManage.btnPanelList)
+            {
+                if (btn.btnlabel == "BoardConfig" || btn.btnlabel == "Board Config")
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
 
+        private int GetBoardConfigIndex()
+        {
+            foreach (var btn in EMExtensionManage.m_EM_DevicesManage.btnPanelList)
+            {
+                if (btn.btnlabel == "BoardConfig" || btn.btnlabel == "Board Config")
+                {
+                    return btn.id;
+                }
+            }
+            return -1;
+        }
+        private void SwitchToBoardConfig()
+        {
+            int index = GetBoardConfigIndex();
+            if (index > 0)
+                parent.FeatureBtnList.SelectedIndex = index;
+        }
+        private string GetPreviousSettingsFilePath()
+        {
+            string settingfilepath = System.IO.Path.Combine(FolderMap.m_currentproj_folder, "settings.xml");
+            XmlDocument doc = new XmlDocument();
+            try
+            {
+                doc.Load(settingfilepath);
+                XmlElement root = doc.DocumentElement;
+                if (root.FirstChild != null && root.FirstChild.Name == "BoardConfigFileName")
+                    return root.FirstChild.InnerText;
+            }
+            catch(Exception e)
+            {
+                MessageBox.Show(e.Message);
+                return "";
+            }
+            return "";
+        }
+        private void LoadPreviousSettings()
+        {
+            string filepath = GetPreviousSettingsFilePath();
+            if (filepath == "") return;
+            List<WorkPanelItem> tabs = EMExtensionManage.m_EM_DevicesManage.GetWorkPanelTabItemsByBtnName("BoardConfig");
+            for (int i = 0; i < tabs.Count; i++)
+            {
+                WorkPanelItem wpi = tabs[i];
+                var BoardConfigSFL = (O2Micro.Cobra.DeviceConfigurationPanel.MainControl)wpi.item;
+                BoardConfigSFL.LoadFile(filepath);
+            }
+        }
         private void SaveAndTestBtn_Click(object sender, RoutedEventArgs e)
         {
             Button o = (Button)sender;
@@ -90,6 +149,13 @@ namespace O2Micro.Cobra.Shell
             
             Hide();
             Close();
+
+            if (hasBoardConfigSFL())    //Issue1374 Leon
+            {
+                MessageBox.Show("Please check board settings first.");
+                SwitchToBoardConfig();
+                LoadPreviousSettings();
+            }
         }
 
         #region 通用控件消息响应

@@ -200,7 +200,7 @@ namespace O2Micro.Cobra.EM
         {
             BtnPanelLink link = m_btnPanelList.Find(delegate(BtnPanelLink node)
             {
-                return node.btnname.Equals(btnname);
+                return node.btnlabel.Equals(btnname);
             }
             );
             if (link != null) return link.workpaneltabitems;

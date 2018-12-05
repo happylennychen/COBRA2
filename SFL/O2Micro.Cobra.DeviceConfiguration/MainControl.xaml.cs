@@ -322,6 +322,13 @@ namespace O2Micro.Cobra.DeviceConfigurationPanel
                     LoadFile(fullpath);
                 }
             }
+            else
+                return;
+
+            if (sflname == "BoardConfig" || sflname == "Board Config")    //Issue1373
+            {
+                SaveBoardConfigFilePath(fullpath);
+            }
         }
 
         private string GetChipName()
@@ -430,12 +437,17 @@ namespace O2Micro.Cobra.DeviceConfigurationPanel
             }
         }
 
-        internal void LoadFile(string fullpath)
+        public void LoadFile(string fullpath)
         {
             double dval = 0.0;
             string tmp;
             SFLModel model;
-
+            if (!File.Exists(fullpath))
+            {
+                gm.message = "The previously saved file path is invalid!";
+                CallWarningControl(gm);
+                return;
+            }
             XmlDocument doc = new XmlDocument();
             try
             {
