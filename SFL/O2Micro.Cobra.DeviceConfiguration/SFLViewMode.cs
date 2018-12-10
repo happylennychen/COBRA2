@@ -239,7 +239,10 @@ namespace O2Micro.Cobra.DeviceConfigurationPanel
                         break;
                 }
             }
-            model.bsubmenu = (model.brone | model.bwone);
+            if (sflname == "BoardConfig" || sflname == "Board Config")//support them both in COBRA2.00.15, so all old and new OCEs will work fine.
+                model.bsubmenu = false;
+            else
+                model.bsubmenu = (model.brone | model.bwone);
             if ((model.data > model.maxvalue) || (model.data < model.minvalue))
                 model.berror = true;
             else

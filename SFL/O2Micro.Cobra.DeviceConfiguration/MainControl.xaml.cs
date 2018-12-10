@@ -96,6 +96,7 @@ namespace O2Micro.Cobra.DeviceConfigurationPanel
         #region C-HFile
         private List<string> lineList = new List<string>();
         #endregion
+        private Dictionary<string, string> BCImg = new System.Collections.Generic.Dictionary<string, string>();
 
         public MainControl(object pParent, string name)
         {
@@ -115,6 +116,11 @@ namespace O2Micro.Cobra.DeviceConfigurationPanel
             msg.gm.PropertyChanged += new PropertyChangedEventHandler(gm_PropertyChanged);
 
             viewmode = new SFLViewMode(pParent, this);
+
+            if (sflname == "BoardConfig" || sflname == "Board Config")//support them both in COBRA2.00.15, so all old and new OCEs will work fine.
+            {
+                SaveBoardConfigToInternalMemory();
+            }
 
             PasswordPopControl.SetParent(mDataGrid);
             WarningPopControl.SetParent(mDataGrid);
@@ -236,7 +242,7 @@ namespace O2Micro.Cobra.DeviceConfigurationPanel
                         }
                 }
             }
-            if (sflname == "BoardConfig" || sflname == "Board Config")	//Issue686
+            if (sflname == "BoardConfig" || sflname == "Board Config")//support them both in COBRA2.00.15, so all old and new OCEs will work fine.	//Issue686
             {
                 WriteBtn.Content = "Apply";
                 ReadBtn.Content = "Reset";
@@ -298,7 +304,7 @@ namespace O2Micro.Cobra.DeviceConfigurationPanel
         {
             string fullpath = "";
             Microsoft.Win32.OpenFileDialog openFileDialog = new Microsoft.Win32.OpenFileDialog();
-            if (sflname == "BoardConfig")
+            if (sflname == "BoardConfig" || sflname == "Board Config")//support them both in COBRA2.00.15, so all old and new OCEs will work fine.
             {
                 openFileDialog.Title = "Load Board Config file";			//Support Production SFL, Leon
                 openFileDialog.Filter = "Board Config file (*.board)|*.board||";
@@ -325,7 +331,7 @@ namespace O2Micro.Cobra.DeviceConfigurationPanel
             else
                 return;
 
-            if (sflname == "BoardConfig" || sflname == "Board Config")    //Issue1373
+            if (sflname == "BoardConfig" || sflname == "Board Config")//support them both in COBRA2.00.15, so all old and new OCEs will work fine.    //Issue1373
             {
                 SaveBoardConfigFilePath(fullpath);
             }
@@ -374,7 +380,7 @@ namespace O2Micro.Cobra.DeviceConfigurationPanel
             return hash.Substring(hash.Length - 5);
         }
 
-        private void SaveBoardConfigFilePath(string fullpath)
+        public void SaveBoardConfigFilePath(string fullpath)
         {
             string settingfilepath = System.IO.Path.Combine(FolderMap.m_currentproj_folder,"settings.xml");
             FileStream file = new FileStream(settingfilepath, FileMode.Create);
@@ -404,7 +410,7 @@ namespace O2Micro.Cobra.DeviceConfigurationPanel
             Microsoft.Win32.SaveFileDialog saveFileDialog = new Microsoft.Win32.SaveFileDialog();
             saveFileDialog.FilterIndex = 1;
             saveFileDialog.RestoreDirectory = true;
-            if (sflname == "BoardConfig" || sflname == "Board Config")
+            if (sflname == "BoardConfig" || sflname == "Board Config")//support them both in COBRA2.00.15, so all old and new OCEs will work fine.
             {
                 saveFileDialog.FileName = chipname+"-"+MD5Code;
                 saveFileDialog.Title = "Save Board Config file";
@@ -431,22 +437,115 @@ namespace O2Micro.Cobra.DeviceConfigurationPanel
             else return;
 
             StatusLabel.Content = fullpath;
-            if (sflname == "BoardConfig" || sflname == "Board Config")    //Issue1373
+            if (sflname == "BoardConfig" || sflname == "Board Config")//support them both in COBRA2.00.15, so all old and new OCEs will work fine.    //Issue1373
             {
                 SaveBoardConfigFilePath(fullpath);
             }
         }
+        private void SaveBoardConfigToInternalMemory()
+        {
+            foreach (SFLModel model in viewmode.sfl_parameterlist)
+            {
+                if (model == null) continue;
+                string name = model.nickname;
+                string strval;
+                switch (model.editortype)
+                {
+                    case 0:
+                        {
+                            strval = model.sphydata;
+                            break;
+                        }
+                    case 1:
+                    case 2:
+                        {
+                            strval = String.Format("{0:F1}", model.data);
+                            break;
+                        }
+                    default:
+                        strval = model.sphydata;
+                        break; ;
+                }
+                BCImg.Add(name, strval);
+            }
+        }
 
-        public void LoadFile(string fullpath)
+        public void LoadBoardConfigFromInternalMemory()
+        {
+            double dval = 0.0;
+            string tmp;
+            SFLModel model;
+            foreach (var item in BCImg)
+            {
+                string name = item.Key;
+                model = viewmode.GetParameterByName(name);
+                if (model == null) continue;
+
+                model.berror = false;
+
+                tmp = item.Value;
+
+                if (model.brange)//为正常录入浮点数
+                {
+                    switch (model.format)
+                    {
+                        case 0: //Int     
+                        case 1: //float1
+                        case 2: //float2
+                        case 3: //float3
+                        case 4: //float4
+                            {
+                                if (!Double.TryParse(tmp, out dval))
+                                    dval = 0.0;
+                                break;
+                            }
+                        case 5: //Hex
+                        case 6: //Word
+                        case 7: //Dword
+                            {
+                                try
+                                {
+                                    dval = (Double)Convert.ToInt32(tmp, 16);
+                                }
+                                catch (Exception e)
+                                {
+                                    dval = 0.0;
+                                    break;
+                                }
+                                break;
+                            }
+                        case 8: //Date
+                            {
+                                try
+                                {
+                                    dval = SharedFormula.DateToUInt32(tmp);
+                                }
+                                catch (Exception e)
+                                {
+                                    break;
+                                }
+                                break;
+                            }
+                        default:
+                            break;
+                    }
+                    model.data = dval;
+                }
+                else
+                    model.sphydata = tmp;
+            }
+        }
+
+        public void BoardConfigAutoLoadFile(string fullpath)
         {
             double dval = 0.0;
             string tmp;
             SFLModel model;
             if (!File.Exists(fullpath))
             {
-                gm.message = "The previously saved file path is invalid!";
-                CallWarningControl(gm);
-                return;
+                //gm.message = "The previously saved file path is invalid! The default values will be used in Board Settings.";
+                //CallWarningControl(gm);
+                throw new NotImplementedException("The previously saved file path is invalid! ");
             }
             XmlDocument doc = new XmlDocument();
             try
@@ -455,9 +554,9 @@ namespace O2Micro.Cobra.DeviceConfigurationPanel
             }
             catch
             {
-                gm.message = "File format error!";
-                CallWarningControl(gm);
-                return;
+                //gm.message = "File format error! The default values will be used in Board Settings.";
+                //CallWarningControl(gm);
+                throw new NotImplementedException("File format error! ");
             }
 
             XmlElement root = doc.DocumentElement;
@@ -491,9 +590,7 @@ namespace O2Micro.Cobra.DeviceConfigurationPanel
                     }
                     else
                     {
-                        gm.message = "File illegal, MD5 check failed";
-                        CallWarningControl(gm);
-                        return;
+                        throw new NotImplementedException("File illegal, MD5 check failed. ");
                     }
                 }
             }
@@ -570,6 +667,134 @@ namespace O2Micro.Cobra.DeviceConfigurationPanel
             StatusLabel.Content = fullpath;
         }
 
+
+        internal void LoadFile(string fullpath)
+        {
+            double dval = 0.0;
+            string tmp;
+            SFLModel model;
+
+            XmlDocument doc = new XmlDocument();
+            try
+            {
+                doc.Load(fullpath);
+            }
+            catch
+            {
+                gm.message = "File format error!";
+                CallWarningControl(gm);
+                return;
+            }
+
+            XmlElement root = doc.DocumentElement;
+
+            StringBuilder sb = new StringBuilder();
+            string hash = "";
+            for (XmlNode xn = root.FirstChild; xn is XmlNode; xn = xn.NextSibling)
+            {
+                string name = xn.Attributes[0].Value;
+                if (name == "MD5")
+                {
+                    hash = xn.InnerText;
+                    continue;
+                }
+                sb.Append(name);
+                tmp = xn.InnerText;
+                sb.Append(tmp);
+            }
+            if (hash == "")         //没有MD5
+            {
+                gm.message = "Warning, this configuration file dosen't have MD5 verification code. You can still use it but we suggest you upgrade it by save to another file.";
+                CallWarningControl(gm);
+            }
+            else
+            {
+                using (MD5 md5Hash = MD5.Create())
+                {
+                    if (VerifyMd5Hash(md5Hash, sb.ToString(), hash))
+                    {
+                        ;
+                    }
+                    else
+                    {
+                        gm.message = "File illegal, MD5 check failed";
+                        CallWarningControl(gm);
+                        return;
+                    }
+                }
+            }
+
+            for (XmlNode xn = root.FirstChild; xn is XmlNode; xn = xn.NextSibling)
+            {
+                //tmp = xn.Name.Replace("H","0x");
+                //selfid = Convert.ToUInt32(tmp, 16);
+                string name = xn.Attributes[0].Value;
+                if (name == "MD5")
+                {
+                    hash = xn.InnerText;
+                    continue;
+                }
+                //if (sflname == "BoardConfig")
+                //if (name.Contains("NEG"))
+                //name = name.Replace("NEG", "-");      //neg for negative
+                model = viewmode.GetParameterByName(name);
+                if (model == null) continue;
+
+                model.berror = false;
+
+                tmp = xn.InnerText;
+
+                if (model.brange)//为正常录入浮点数
+                {
+                    switch (model.format)
+                    {
+                        case 0: //Int     
+                        case 1: //float1
+                        case 2: //float2
+                        case 3: //float3
+                        case 4: //float4
+                            {
+                                if (!Double.TryParse(tmp, out dval))
+                                    dval = 0.0;
+                                break;
+                            }
+                        case 5: //Hex
+                        case 6: //Word
+                        case 7: //Dword
+                            {
+                                try
+                                {
+                                    dval = (Double)Convert.ToInt32(tmp, 16);
+                                }
+                                catch (Exception e)
+                                {
+                                    dval = 0.0;
+                                    break;
+                                }
+                                break;
+                            }
+                        case 8: //Date
+                            {
+                                try
+                                {
+                                    dval = SharedFormula.DateToUInt32(tmp);
+                                }
+                                catch (Exception e)
+                                {
+                                    break;
+                                }
+                                break;
+                            }
+                        default:
+                            break;
+                    }
+                    model.data = dval;
+                }
+                else
+                    model.sphydata = tmp;
+            }
+            StatusLabel.Content = fullpath;
+        }
         internal void SaveFile(string fullpath)
         {
             int index = fullpath.LastIndexOf('.');
@@ -660,9 +885,56 @@ namespace O2Micro.Cobra.DeviceConfigurationPanel
             //string timestamp = DateTime.Now.ToString();
             //int log_id = -1;
             //DBManager.NewLog("Com", "Com Log", timestamp, ref log_id);
-            Read();
+            if (sflname == "BoardConfig" || sflname == "Board Config")//support them both in COBRA2.00.15, so all old and new OCEs will work fine.
+                Reset();
+            else
+                Read();
         }
+        private void Reset()
+        {
+            StatusLabel.Content = "";
+            if (parent.bBusy)
+            {
+                gm.level = 1;
+                gm.controls = "Read From Device button";
+                gm.message = LibErrorCode.GetErrorDescription(LibErrorCode.IDS_ERR_EM_THREAD_BKWORKER_BUSY);
+                gm.bupdate = true;
+                CallWarningControl(gm);
+                return;
+            }
+            else
+                parent.bBusy = true;
 
+            msg.percent = 40;
+            msg.task = TM.TM_READ;
+            parent.AccessDevice(ref m_Msg);
+            while (msg.bgworker.IsBusy)
+                System.Windows.Forms.Application.DoEvents();
+            if (msg.errorcode != LibErrorCode.IDS_ERR_SUCCESSFUL)
+            {
+                gm.level = 2;
+                gm.message = LibErrorCode.GetErrorDescription(msg.errorcode);
+                CallWarningControl(gm);
+                parent.bBusy = false;
+                return;
+            }
+
+            msg.percent = 80;
+            msg.task = TM.TM_CONVERT_HEXTOPHYSICAL;
+            parent.AccessDevice(ref m_Msg);
+            while (msg.bgworker.IsBusy)
+                System.Windows.Forms.Application.DoEvents();
+            if (msg.errorcode != LibErrorCode.IDS_ERR_SUCCESSFUL)
+            {
+                gm.level = 2;
+                gm.message = LibErrorCode.GetErrorDescription(msg.errorcode);
+                CallWarningControl(gm);
+                parent.bBusy = false;
+                return;
+            }
+
+            parent.bBusy = false;
+        }
         private void Read()
         {
             //if(parent.bSimulation)
@@ -796,9 +1068,15 @@ namespace O2Micro.Cobra.DeviceConfigurationPanel
                     msg.task_parameterlist = viewmode.dm_part_parameterlist;
                     break;
                 case "Button":
-                    msg.gm.message = "you are ready to write entirely area,please be care!";
-                    msg.controlreq = COMMON_CONTROL.COMMON_CONTROL_SELECT;
-                    if (!msg.controlmsg.bcancel) return;
+                    if (sflname == "BoardConfig" || sflname == "Board Config")//support them both in COBRA2.00.15, so all old and new OCEs will work fine.
+                    {
+                    }
+                    else
+                    {
+                        msg.gm.message = "you are ready to write entirely area,please be care!";
+                        msg.controlreq = COMMON_CONTROL.COMMON_CONTROL_SELECT;
+                        if (!msg.controlmsg.bcancel) return; 
+                    }
 
                     msg.gm.controls = ((System.Windows.Controls.Button)sender).Content.ToString();
                     msg.task_parameterlist = viewmode.dm_parameterlist;
@@ -812,9 +1090,59 @@ namespace O2Micro.Cobra.DeviceConfigurationPanel
                     btn_ctrl.btn_cm.IsOpen = true;
                     return;
             }
-            write();
+            if (sflname == "BoardConfig" || sflname == "Board Config")//support them both in COBRA2.00.15, so all old and new OCEs will work fine.
+                Apply();
+            else
+                write();
         }
+        private void Apply()
+        {
+            UInt32 ret = LibErrorCode.IDS_ERR_SUCCESSFUL;
+            if (parent.bBusy)
+            {
+                gm.level = 1;
+                gm.controls = "Write To Device button!";
+                gm.message = LibErrorCode.GetErrorDescription(LibErrorCode.IDS_ERR_EM_THREAD_BKWORKER_BUSY);
+                gm.bupdate = true;
+                CallWarningControl(gm);
+                return;
+            }
+            else
+                parent.bBusy = true;
 
+            ret = viewmode.WriteDevice();
+            if (ret != LibErrorCode.IDS_ERR_SUCCESSFUL)
+            {
+                gm.level = 2;
+                gm.message = LibErrorCode.GetErrorDescription(ret);
+                CallWarningControl(gm);
+                parent.bBusy = false;
+                return;
+            }
+            StatusLabel.Content = "";
+
+            msg.percent = 30;
+            msg.task = TM.TM_CONVERT_PHYSICALTOHEX;
+            parent.AccessDevice(ref m_Msg);
+            while (msg.bgworker.IsBusy)
+                System.Windows.Forms.Application.DoEvents();
+
+            msg.percent = 70;
+            msg.task = TM.TM_WRITE;
+            parent.AccessDevice(ref m_Msg);
+            while (msg.bgworker.IsBusy)
+                System.Windows.Forms.Application.DoEvents();
+            if (msg.errorcode != LibErrorCode.IDS_ERR_SUCCESSFUL)
+            {
+                gm.level = 2;
+                gm.message = LibErrorCode.GetErrorDescription(msg.errorcode);
+                CallWarningControl(gm);
+                parent.bBusy = false;
+                return;
+            }
+
+            parent.bBusy = false;
+        }
         private void write()
         {
             UInt32 ret = LibErrorCode.IDS_ERR_SUCCESSFUL;

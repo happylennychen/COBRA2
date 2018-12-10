@@ -38,7 +38,7 @@ namespace O2Micro.Cobra.ProductionPanel
     public partial class MainControl
     {
         #region 变量定义
-
+        private string ProductionSFLName = "";
         private static class ProductionRecord
         {
             public static Dictionary<string, string> DBRecord = new Dictionary<string, string>();
@@ -75,7 +75,7 @@ namespace O2Micro.Cobra.ProductionPanel
         }
 
         private string m_SFLname;
-        public string sflname
+        public string ProductionSFLDBName
         {
             get { return m_SFLname; }
             set { m_SFLname = value; }
@@ -157,16 +157,31 @@ namespace O2Micro.Cobra.ProductionPanel
             parent = (Device)pParent;
             if (parent == null) return;
 
-            sflname = name;
-            if (String.IsNullOrEmpty(sflname)) return;
+            ProductionSFLName = name;
+            ProductionSFLDBName = "Production";
+            if (String.IsNullOrEmpty(ProductionSFLDBName)) return;
 
-            cfgviewmodel = new SFLViewModel(pParent, this, "EfuseConfig");
-            boardviewmodel = new SFLViewModel(pParent, this, "BoardConfig");
+            string EFsflname = "";
+            string BDsflname = "";
+            foreach (var btn in EMExtensionManage.m_EM_DevicesManage.btnPanelList)
+            {
+                if (btn.btnlabel == "BoardConfig" || btn.btnlabel == "Board Config")
+                {
+                    BDsflname = btn.btnlabel;
+                }
+                else if (btn.btnlabel == "EfuseConfig" || btn.btnlabel == "EFUSE Config")
+                {
+                    EFsflname = btn.btnlabel;
+                }
+            }
+
+            cfgviewmodel = new SFLViewModel(pParent, this, EFsflname);
+            boardviewmodel = new SFLViewModel(pParent, this, BDsflname);
             #endregion
 
             #region 初始化Password
             string str_option = String.Empty;
-            XmlNodeList nodelist = parent.GetUINodeList(sflname);
+            XmlNodeList nodelist = parent.GetUINodeList(ProductionSFLName);
             string password = String.Empty;
             foreach (XmlNode node in nodelist)
             {
@@ -196,7 +211,7 @@ namespace O2Micro.Cobra.ProductionPanel
                 columns.Add("TestResult", DBManager.DataType.TEXT);
                 columns.Add("Time", DBManager.DataType.TEXT);
                 ProductionRecord.Init(columns);
-                int ret = DBManager.CreateTableN(sflname, columns);
+                int ret = DBManager.CreateTableN(ProductionSFLDBName, columns);
                 if (ret != 0)
                     System.Windows.MessageBox.Show("Create Production Table Failed!");
             }
@@ -207,13 +222,13 @@ namespace O2Micro.Cobra.ProductionPanel
             #region Hide or Show Configuration Tab
             XmlElement root = EMExtensionManage.m_extDescrip_xmlDoc.DocumentElement;
             if (root == null) return;
-            XmlNode ProductionNode = root.SelectSingleNode("descendant::Button[@Name = 'Production']");
+            XmlNode ProductionNode = root.SelectSingleNode("descendant::Button[@DBModuleName = '"+ProductionSFLDBName+"']");
             XmlElement xe = (XmlElement)ProductionNode;
             string ShowConfig = xe.GetAttribute("ShowConfig");
             if (ShowConfig.ToUpper() == "FALSE")
                 CFGContainer.Visibility = System.Windows.Visibility.Collapsed;
             else
-                CFGTab.Init(this, "Production");
+                CFGTab.Init(this, ProductionSFLName);
 
             string ShowVerify = xe.GetAttribute("ShowVerify");
             if (ShowVerify.ToUpper() == "FALSE")
@@ -743,7 +758,7 @@ namespace O2Micro.Cobra.ProductionPanel
         {
             msg.task_parameterlist.parameterlist = cfgviewmodel.dm_parameterlist.parameterlist;
             msg.owner = this;
-            msg.gm.sflname = sflname;
+            msg.gm.sflname = ProductionSFLName;
             UInt32 ret = LibErrorCode.IDS_ERR_SUCCESSFUL;
 
             #region Database New Log
@@ -751,7 +766,7 @@ namespace O2Micro.Cobra.ProductionPanel
             {
                 string timestamp = DateTime.Now.ToString();
                 int log_id = -1;
-                int r = DBManager.NewLog(sflname, "Production Log", timestamp, ref log_id);
+                int r = DBManager.NewLog(ProductionSFLDBName, "Production Log", timestamp, ref log_id);
                 if (r != 0)
                 {
                     System.Windows.MessageBox.Show("New Production Log Failed!");
@@ -813,7 +828,7 @@ namespace O2Micro.Cobra.ProductionPanel
         {
             UInt32 ret = LibErrorCode.IDS_ERR_SUCCESSFUL;
             msg.owner = this;
-            msg.gm.sflname = sflname;
+            msg.gm.sflname = ProductionSFLName;
             msg.task = TM.TM_BLOCK_MAP;
             parent.AccessDevice(ref m_Msg);
             while (msg.bgworker.IsBusy)
@@ -828,7 +843,7 @@ namespace O2Micro.Cobra.ProductionPanel
         {
             UInt32 ret = LibErrorCode.IDS_ERR_SUCCESSFUL;
             msg.owner = this;
-            msg.gm.sflname = sflname;
+            msg.gm.sflname = ProductionSFLName;
             msg.task = TM.TM_COMMAND;
             msg.sub_task = sub_task;
             parent.AccessDevice(ref m_Msg);
@@ -888,7 +903,7 @@ namespace O2Micro.Cobra.ProductionPanel
         }
         private UInt32 SendTestCommand()
         {
-            scanlist = parent.GetParamLists("MPTConfig").parameterlist;
+            scanlist = parent.GetParamLists(ProductionSFLName).parameterlist;
             msg.task_parameterlist.parameterlist = scanlist;
             msg.task = TM.TM_READ;
             parent.AccessDevice(ref m_Msg);
@@ -1214,7 +1229,7 @@ namespace O2Micro.Cobra.ProductionPanel
                 {
                     string timestamp = DateTime.Now.ToString();
                     int log_id = -1;
-                    int r = DBManager.NewLog(sflname, "Production Log", timestamp, ref log_id);
+                    int r = DBManager.NewLog(ProductionSFLDBName, "Production Log", timestamp, ref log_id);
                     if (r != 0)
                         System.Windows.MessageBox.Show("New Production Log Failed!");
                 }
@@ -1224,7 +1239,7 @@ namespace O2Micro.Cobra.ProductionPanel
                 ProductionRecord.DBRecord["ProcessResult"] = prLstring;
                 ProductionRecord.DBRecord["TestResult"] = trLstring;
                 ProductionRecord.DBRecord["Time"] = DateTime.Now.ToString("yyyy-MM-dd:hh-mm-ss");
-                ProductionRecord.Save(sflname);
+                ProductionRecord.Save(ProductionSFLDBName);
                 #endregion
                 #endregion
                 #region Show Success Message

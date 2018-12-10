@@ -146,7 +146,7 @@ namespace O2Micro.Cobra.AutoMationTest
         public static void CompletedWork(TASKMessage taskMsg)
         {
             if (taskMsg.gm.sflname == null) return;
-            if (taskMsg.gm.sflname.Equals("DeviceConfig") || taskMsg.gm.sflname.Equals("EfuseConfig"))
+            if (taskMsg.gm.sflname.Equals("DeviceConfig") || taskMsg.gm.sflname.Equals("EfuseConfig") || taskMsg.gm.sflname.Equals("EFUSE Config"))
             {
                 m_taskMsg = taskMsg;
                 UpdateParamByRegMap();

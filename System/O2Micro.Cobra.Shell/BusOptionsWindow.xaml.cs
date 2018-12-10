@@ -28,6 +28,7 @@ namespace O2Micro.Cobra.Shell
 	/// </summary>
 	public partial class BusOptionsWindow : Window
     {
+        public string BoardConfigsflname; 
         //父对象保存
         private MainWindow m_parent;
         public MainWindow parent
@@ -68,12 +69,14 @@ namespace O2Micro.Cobra.Shell
 			Hide();
             Close();
 		}
+        private O2Micro.Cobra.DeviceConfigurationPanel.MainControl BoardConfigSFL;
         private bool hasBoardConfigSFL()
         {
             foreach (var btn in EMExtensionManage.m_EM_DevicesManage.btnPanelList)
             {
                 if (btn.btnlabel == "BoardConfig" || btn.btnlabel == "Board Config")
                 {
+                    BoardConfigsflname = btn.btnlabel;
                     return true;
                 }
             }
@@ -101,30 +104,32 @@ namespace O2Micro.Cobra.Shell
         {
             string settingfilepath = System.IO.Path.Combine(FolderMap.m_currentproj_folder, "settings.xml");
             XmlDocument doc = new XmlDocument();
-            try
-            {
-                doc.Load(settingfilepath);
-                XmlElement root = doc.DocumentElement;
-                if (root.FirstChild != null && root.FirstChild.Name == "BoardConfigFileName")
-                    return root.FirstChild.InnerText;
-            }
-            catch(Exception e)
-            {
-                MessageBox.Show(e.Message);
-                return "";
-            }
+            doc.Load(settingfilepath);
+            XmlElement root = doc.DocumentElement;
+            if (root.FirstChild != null && root.FirstChild.Name == "BoardConfigFileName")
+                return root.FirstChild.InnerText;
             return "";
         }
         private void LoadPreviousSettings()
         {
-            string filepath = GetPreviousSettingsFilePath();
-            if (filepath == "") return;
-            List<WorkPanelItem> tabs = EMExtensionManage.m_EM_DevicesManage.GetWorkPanelTabItemsByBtnName("BoardConfig");
-            for (int i = 0; i < tabs.Count; i++)
+            try
             {
-                WorkPanelItem wpi = tabs[i];
-                var BoardConfigSFL = (O2Micro.Cobra.DeviceConfigurationPanel.MainControl)wpi.item;
-                BoardConfigSFL.LoadFile(filepath);
+                string filepath = GetPreviousSettingsFilePath();
+                if (filepath == "")
+                {
+                    BoardConfigSFL.LoadBoardConfigFromInternalMemory();
+                    return;
+                }
+                BoardConfigSFL.BoardConfigAutoLoadFile(filepath);
+            }
+            catch (Exception e)
+            {
+                MessageBox.Show(e.Message + "The default values will be used in Board Settings.");
+                //set Settings.xml content to ""
+                //Load default
+                BoardConfigSFL.LoadBoardConfigFromInternalMemory();
+                BoardConfigSFL.SaveBoardConfigFilePath("");
+                return;
             }
         }
         private void SaveAndTestBtn_Click(object sender, RoutedEventArgs e)
@@ -154,6 +159,14 @@ namespace O2Micro.Cobra.Shell
             {
                 MessageBox.Show("Please check board settings first.");
                 SwitchToBoardConfig();
+
+                List<WorkPanelItem> tabs = EMExtensionManage.m_EM_DevicesManage.GetWorkPanelTabItemsByBtnName(BoardConfigsflname);
+                for (int i = 0; i < tabs.Count; i++)
+                {
+                    WorkPanelItem wpi = tabs[i];
+                    BoardConfigSFL = (O2Micro.Cobra.DeviceConfigurationPanel.MainControl)wpi.item;
+                }
+
                 LoadPreviousSettings();
             }
         }

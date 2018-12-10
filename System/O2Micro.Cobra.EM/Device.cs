@@ -533,7 +533,7 @@ namespace O2Micro.Cobra.EM
                         try
                         {
                             #region create log for AMT and Com
-                            if (msg.gm.sflname.Equals("DeviceConfig") || msg.gm.sflname.Equals("EfuseConfig"))  //only for Config SFL
+                            if (msg.gm.sflname.Equals("DeviceConfig") || msg.gm.sflname.Equals("EfuseConfig") || msg.gm.sflname.Equals("EFUSE Config"))  //only for Config SFL
                             {
                                 #region use CobraLog
                                 string str = "";

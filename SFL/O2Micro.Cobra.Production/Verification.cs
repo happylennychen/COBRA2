@@ -205,7 +205,7 @@ namespace O2Micro.Cobra.ProductionPanel
 
                                     #region 调用DEM API
                                     msg.owner = this;
-                                    msg.gm.sflname = sflname;
+                                    msg.gm.sflname = ProductionSFLDBName;
                                     var list = new AsyncObservableCollection<Parameter>();
                                     list.Add(p.parent);
                                     msg.task_parameterlist.parameterlist = list;
@@ -354,7 +354,7 @@ namespace O2Micro.Cobra.ProductionPanel
 
                                     #region 调用DEM API
                                     msg.owner = this;
-                                    msg.gm.sflname = sflname;
+                                    msg.gm.sflname = ProductionSFLDBName;
                                     var list = new AsyncObservableCollection<Parameter>();
                                     list.Add(param1);
                                     list.Add(param);
