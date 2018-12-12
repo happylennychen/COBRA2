@@ -21,7 +21,7 @@ namespace O2Micro.Cobra.Common
 
         public static bool supportdb = false;       //目前只有部分oce支持db，通过此变量来兼容不支持的oce。当所有oce都支持db后，可以去掉
         public static bool DebugMode = false;       //为true时，每次启动都会在CobraDocument/Database/DebugDB创建新的临时DB
-        private static string DBName = "CobraDB.db3";
+        private static string DBName = "CobraDBv1.1.db3";
         private static string DBpath = "";
         private static object DB_Lock = new object();
         //From Guo.zhu
@@ -47,23 +47,26 @@ namespace O2Micro.Cobra.Common
 
         private static void t_Elapsed(object sender, EventArgs e)
         {
-            lock (DB_Lock)
+            if (sqls.Count == 0)
             {
-                if (sqls.Count == 0)
+                if (idle_cnt >= 3)
                 {
-                    if (idle_cnt >= 3)
-                    {
-                        t.Stop();
-                        idle_cnt = 0;
-                    }
-                    else
-                        idle_cnt++;
+                    t.Stop();
+                    idle_cnt = 0;
                 }
                 else
+                    idle_cnt++;
+            }
+            else
+            {
+                SQLiteResult sret = SQLiteDriver.ExecuteNonQueryTransaction(sqls);
+                if (sret.I == -1)
                 {
-                    SQLiteResult sret = SQLiteDriver.ExecuteNonQueryTransaction(sqls);
-                    sqls.Clear();
+                    //todo: add warning here
+                    MessageBox.Show(sret.Str);
                 }
+                else
+                    sqls.Clear();
             }
         }
 
@@ -304,7 +307,7 @@ namespace O2Micro.Cobra.Common
                     sqls.Add("CREATE TABLE IF NOT EXISTS Projects(project_id INTEGER PRIMARY KEY, product_id INTEGER NOT NULL, user_type TEXT NOT NULL, date TEXT NOT NULL, bus_type TEXT NOT NULL, UNIQUE(product_id, user_type, date));");
                     sqls.Add("CREATE TABLE IF NOT EXISTS Modules(module_id INTEGER PRIMARY KEY, module_name VARCHAR(30) NOT NULL, UNIQUE(module_name));");
                     sqls.Add("CREATE TABLE IF NOT EXISTS TableTypes(table_type INTEGER PRIMARY KEY, project_id INTEGER NOT NULL, module_id INTEGER NOT NULL, UNIQUE(project_id, module_id));");
-                    sqls.Add("CREATE TABLE IF NOT EXISTS Logs(log_id INTEGER PRIMARY KEY, table_type INTEGER NOT NULL, log_info VARCHAR(30), timestamp VARCHAR(17));");
+                    sqls.Add("CREATE TABLE IF NOT EXISTS Logs(log_id INTEGER PRIMARY KEY, table_type INTEGER NOT NULL, log_info VARCHAR(30), timestamp VARCHAR(17) NOT NULL, device_num VARCHAR(10));");
                     sqls.Add("CREATE TABLE IF NOT EXISTS Bus_I2C(project_id INTEGER, device_id INTEGER, frequency INTEGER NOT NULL, address INTEGER NOT NULL, pec_enable BOOLEAN NOT NULL, UNIQUE(project_id, device_id));");
                     //todo: Bus_SPI Bus_I2C2 Bus_???
                     SQLiteResult sret = SQLiteDriver.ExecuteNonQueryTransaction(sqls);
@@ -568,7 +571,7 @@ namespace O2Micro.Cobra.Common
             }
         }
 
-        public static void BeginNewRow(string module_name, DataRow record)
+        public static void BeginNewRow(string module_name, DataRow record)  //Added by Guo, used by FSBS2 and UFPSBS
         {
             lock (DB_Lock)
             {
@@ -576,8 +579,8 @@ namespace O2Micro.Cobra.Common
                 int table_type;
 
                 if (DBManager.supportdb == true)
-                {/*
-                    if (!t.Enabled)
+                {
+                    /*if (!t.Enabled)
                     {
                         t.Interval = 15000;
                         t.Start();
@@ -613,7 +616,7 @@ namespace O2Micro.Cobra.Common
             }
         }
 
-        public static Int32 NewRows(string module_name, List<Dictionary<string, string>> records)
+        public static Int32 NewRows(string module_name, List<Dictionary<string, string>> records)   //Used by COMM and AMT
         {
             lock (DB_Lock)
             {
@@ -853,6 +856,158 @@ namespace O2Micro.Cobra.Common
                     return 0;
             }
         }
+
+        #region support multiple device
+        public static int NewLog(string module_name, string log_info, string timestamp, string device_num, ref int log_id)
+        {
+            lock (DB_Lock)
+            {
+                if (DBManager.supportdb == true)
+                {
+                    int module_id = DBManager.GetModuleIDFromModules(module_name);
+                    if (module_id == -1)
+                        return -1;
+                    int table_type = DBManager.GetTableTypeFromTableTypes(Project_id, module_id);
+                    if (table_type == -1)
+                        return -1;
+
+                    Dictionary<string, string> record = new Dictionary<string, string>();
+                    record.Add("device_num", device_num);
+                    record.Add("table_type", table_type.ToString());
+                    record.Add("log_info", log_info);
+                    record.Add("timestamp", timestamp);
+                    int row = -1;
+                    SQLiteResult sret = SQLiteDriver.DBInsertInto("Logs", record, ref row);
+                    if (sret.I != 0)
+                    {
+                        //todo: add warning here
+                        //MessageBox.Show(sret.Str);
+                        return sret.I;
+                    }
+                    log_id = DBManager.GetLogIDFromLogs(table_type, timestamp);
+                    if (log_id == -1)
+                        return -1;
+                    if (currentLogID.ContainsKey(device_num + module_name))
+                        currentLogID[device_num + module_name] = log_id;
+                    else
+                        currentLogID.Add(device_num + module_name, log_id);
+                    return sret.I;
+                }
+                else
+                    return 0;
+            }
+        }
+        public static Int32 BeginNewRow(string module_name, string device_num, Dictionary<string, string> record)
+        {
+            lock (DB_Lock)
+            {
+                if (DBManager.supportdb == true)
+                {
+                    if (!t.Enabled)
+                    {
+                        t.Interval = 15000;
+                        t.Start();
+                    }
+
+                    int module_id;
+                    //module_id = DBManager.GetModuleID(module_name);
+                    var queryResults =
+                        from module in Modules.AsEnumerable()
+                        select module;
+                    var rows =
+                        queryResults.Where(p => p.Field<string>("module_name") == module_name);
+                    module_id = (int)rows.ToArray()[0].Field<long>("module_id");
+
+                    int table_type;
+                    //table_type = DBManager.GetTableType(Project_id, module_id);
+                    queryResults =
+                        from tabletype in TableTypes.AsEnumerable()
+                        select tabletype;
+                    rows =
+                        queryResults.Where(p => p.Field<long>("project_id") == Project_id);
+                    rows =
+                        rows.Where(p => p.Field<long>("module_id") == module_id);
+                    table_type = (int)rows.ToArray()[0].Field<long>("table_type");
+
+                    int log_id = currentLogID[device_num + module_name];
+
+                    Dictionary<string, string> m_record = new Dictionary<string, string>();
+                    m_record.Add("log_id", log_id.ToString());
+                    foreach (string key in record.Keys)
+                    {
+                        m_record.Add(key, record[key]);
+                    }
+                    /*int row = -1;
+                    SQLiteResult sret = SQLiteDriver.DBInsertInto("Table" + table_type.ToString(), m_record, ref row);
+                    if (sret.I != 0)
+                    {
+                        //todo: add warning here
+                        //MessageBox.Show(sret.Str);
+                    }
+                    return sret.I;*/
+                    string sql = SQLiteDriver.SQLInsertInto("Table" + table_type.ToString(), m_record);
+                    sqls.Add(sql);
+                    return 0;
+                }
+                else
+                    return 0;
+            }
+        }
+        public static Int32 GetLogsInforV2(string module_name, ref List<List<string>> records)
+        {
+            lock (DB_Lock)
+            {
+                if (DBManager.supportdb == true)
+                {
+                    SQLiteResult sret;
+                    if (sqls.Count != 0)
+                    {
+                        sret = SQLiteDriver.ExecuteNonQueryTransaction(sqls);
+                        if (sret.I != 0)
+                            return sret.I;
+                        sqls.Clear();
+                    }
+                    int module_id = GetModuleIDFromModules(module_name);
+                    if (module_id == -1)
+                        return -1;
+                    int table_type = GetTableTypeFromTableTypes(Project_id, module_id);
+                    if (table_type == -1)
+                        return -1;
+
+                    Dictionary<string, string> conditions = new Dictionary<string, string>();
+                    conditions.Add("table_type", table_type.ToString());
+                    List<string> datacolumns = new List<string>();
+                    datacolumns.Add("log_id");
+                    datacolumns.Add("timestamp");
+                    datacolumns.Add("device_num");
+
+                    int row = -1;
+                    List<List<string>> datavalues = new List<List<string>>();
+                    sret = SQLiteDriver.DBSelect("Logs", conditions, datacolumns, ref datavalues, ref row);
+                    if (sret.I == 0 && datavalues.Count != 0)
+                    {
+                        foreach (var datavalue in datavalues)
+                        {
+                            int log_id = Convert.ToInt32(datavalue[0]);
+                            string timestamp = datavalue[1];
+                            string device_num = datavalue[2];
+                            int log_size = GetLogSize(log_id);
+                            List<string> item = new List<string>();
+                            item.Add(timestamp);
+                            item.Add(log_size.ToString());
+                            item.Add(device_num);
+                            records.Add(item);
+                        }
+                        return sret.I;
+                    }
+                    else
+                        return sret.I;
+                }
+                else
+                    return 0;
+            }
+        }
+        #endregion
         #endregion
     }
     /// <summary>
